@@ -1,6 +1,11 @@
-'use strict'
+/*
+ * Copyright (c) 2014-2022 Bjoern Kimminich & the OWASP Juice Shop contributors.
+ * SPDX-License-Identifier: MIT
+ */
 
-var proxy = {
+const url = require('url')
+
+let proxy = {
   proxyType: 'autodetect'
 }
 
@@ -17,12 +22,15 @@ exports.config = {
   allScriptsTimeout: 80000,
 
   specs: [
-    'test/e2e/*.js'
+    'test/e2e/*.ts'
   ],
 
   capabilities: {
     browserName: 'chrome',
-    proxy: proxy
+    proxy: proxy,
+    chromeOptions: {
+      args: ['--window-size=1024,768', '--disable-features=SameSiteByDefaultCookies']
+    }
   },
 
   baseUrl: 'http://localhost:3000',
@@ -33,22 +41,34 @@ exports.config = {
     showColors: true,
     defaultTimeoutInterval: 90000
   },
-
+  beforeLaunch: function () {
+    require('ts-node').register({
+      project: 'tsconfig.json'
+    })
+  },
   onPrepare: function () {
-    var jasmineReporters = require('jasmine-reporters')
+    const jasmineReporters = require('jasmine-reporters')
     jasmine.getEnv().addReporter(new jasmineReporters.JUnitXmlReporter({
       consolidateAll: true,
       savePath: 'build/reports/e2e_results'
     }))
 
-    // Get cookie consent popup out of the way
-    browser.get('/#')
+    let basePath = (new url.URL(browser.baseUrl)).pathname
+    if (basePath === '/') basePath = ''
+
+    // Get all banners out of the way
+    browser.get(basePath + '/#')
     browser.manage().addCookie({ name: 'cookieconsent_status', value: 'dismiss' })
+    browser.manage().addCookie({ name: 'welcomebanner_status', value: 'dismiss' })
+
+    // Ensure score board shows all challenges (by default only 1-star challenges are shown)
+    browser.get(basePath + '/#/score-board')
+    element(by.id('btnToggleAllDifficulties')).click()
   }
 }
 
-if (process.env.TRAVIS_BUILD_NUMBER) {
+if (process.env.CI) {
   exports.config.capabilities.chromeOptions = {
-    args: ['--headless', '--disable-gpu', '--window-size=800,600']
+    args: ['--headless', '--disable-gpu', '--window-size=1024,768', '--disable-features=SameSiteByDefaultCookies']
   }
 }
